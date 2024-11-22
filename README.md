@@ -20,6 +20,9 @@ However, the for loop needs to invoke the processing code. But let's not make th
 There are different ways to do this:
 
 - Create a base class called `IPixelProcessor`, with a pure-virtual function to do the processing. Derive two brighteners from it. Make `processPixels` accept a reference to `IPixelProcessor`
+
+or, reduce the amount of code:
+
 - Accept a function in `processPixels`. Use lambdas with capture groups in the caller, one for each brightener.
 
 **Part 2**: Fix the test-failure due to a bug in `AddBrighteningImage`.
