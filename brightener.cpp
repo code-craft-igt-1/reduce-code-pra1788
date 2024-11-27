@@ -1,42 +1,53 @@
 #include "./brightener.h"
 
-ImageBrightener::ImageBrightener(std::shared_ptr<Image> inputImage): m_inputImage(inputImage) {
-}
+// Constructor
+ImageBrightener::ImageBrightener(std::shared_ptr<Image> inputImage) : m_inputImage(inputImage) {}
 
+// Brightens the entire image by adding a constant to each pixel
 int ImageBrightener::BrightenWholeImage() {
-    // For brightening, we add a certain grayscale (25) to every pixel.
-    // While brightening, some pixels may cross the max brightness. They are
-    // called 'attenuated' pixels
     int attenuatedPixelCount = 0;
-    for (int x = 0; x < m_inputImage->m_rows; x++) {
-        for (int y = 0; y < m_inputImage->m_columns; y++) {
-            if (m_inputImage->pixels[x * m_inputImage->m_columns + y] > (255 - 25)) {
-                ++attenuatedPixelCount;
-                m_inputImage->pixels[x * m_inputImage->m_columns + y] = 255;
-            } else {
-                int pixelIndex = x * m_inputImage->m_columns + y;
-                m_inputImage->pixels[pixelIndex] += 25;
-            }
+
+    // Lambda to brighten pixels and count those that are saturated
+    std::function<void(int, int, uint8_t&)> brightenLambda =
+    [this, &attenuatedPixelCount](int x, int y, uint8_t& pixel) {
+        if (pixel > (255 - 25)) {
+            ++attenuatedPixelCount;
+            pixel = 255;  // Set pixel to max value if it's too bright
+        } else {
+            pixel += 25;  // Otherwise, add a constant to brighten it
         }
-    }
+    };
+
+    m_inputImage->processPixels(brightenLambda);
     return attenuatedPixelCount;
 }
 
-bool ImageBrightener::AddBrighteningImage(std::shared_ptr<Image> imageToAdd, int& attenuatedCount) {
-    if (imageToAdd->m_rows != m_inputImage->m_rows || imageToAdd->m_columns != m_inputImage->m_columns) {
+// Adds pixel values from another image, ensuring the result doesn't exceed 255
+bool ImageBrightener::AddBrighteningImage(std::shared_ptr<Image> imageToAdd, int* attenuatedCount) {
+    // Early return if images are incompatible in size
+    if (!AreImagesCompatible(imageToAdd)) {
         return false;
     }
-    attenuatedCount = 0;
-    for (int x = 0; x < m_inputImage->m_rows; x++) {
-        for (int y = 0; y < m_inputImage->m_columns; y++) {
-            int pixelIndex = x * m_inputImage->m_columns + y;
-            if (static_cast<int>(m_inputImage->pixels[pixelIndex]) + imageToAdd->pixels[pixelIndex] > 255) {
-                ++attenuatedCount;
-                m_inputImage->pixels[pixelIndex] = 255;
-            } else {
-                imageToAdd->pixels[pixelIndex] += m_inputImage->pixels[pixelIndex];
-            }
+
+    *attenuatedCount = 0;  // Initialize attenuated count
+
+    // Lambda to add pixel brightness from another image
+    auto addBrightnessLambda = [this, imageToAdd, attenuatedCount](int x, int y, uint8_t& pixel) {
+        int pixelIndex = x * m_inputImage->m_columns + y;
+        uint8_t newPixelValue = pixel + imageToAdd->pixels[pixelIndex];
+        if (newPixelValue > 255) {
+            pixel = 255;
+            (*attenuatedCount)++;  // Increment attenuated count if pixel value is capped
+        } else {
+            pixel = newPixelValue;  // Otherwise, just update pixel value
         }
-    }
+    };
+
+    m_inputImage->processPixels(addBrightnessLambda);
     return true;
+}
+
+// Helper function to check if the images have the same dimensions this helped to reduce CCN < 3
+bool ImageBrightener::AreImagesCompatible(std::shared_ptr<Image> imageToAdd) {
+    return imageToAdd->m_rows == m_inputImage->m_rows && imageToAdd->m_columns == m_inputImage->m_columns;
 }
